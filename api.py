@@ -1,4 +1,4 @@
-from db_conn import get_connection
+from db_conn import get_connection, use_sqlite
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
@@ -6,14 +6,12 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 CORS(app)
 
-# ==================== Database Functions ====================
-
 def fetch_all_riders():
-    """Fetch all riders from database"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     SELECT id, brand_name, store_name, employee_no, employee_name, 
                            employee_email, employee_phone, employee_gender, employee_dob,
                            pan_number, employee_address, employee_city, employee_state,
@@ -22,93 +20,116 @@ def fetch_all_riders():
                     FROM rider_insurance_details 
                     ORDER BY created_at DESC
                 """)
-                rows = cur.fetchall()
-                riders = []
-                for row in rows:
-                    riders.append({
-                        'id': row[0],
-                        'brand_name': row[1],
-                        'store_name': row[2],
-                        'employee_no': row[3],
-                        'employee_name': row[4],
-                        'employee_email': row[5],
-                        'employee_phone': row[6],
-                        'employee_gender': row[7],
-                        'employee_dob': str(row[8]) if row[8] else None,
-                        'pan_number': row[9],
-                        'employee_address': row[10],
-                        'employee_city': row[11],
-                        'employee_state': row[12],
-                        'employee_pin_code': row[13],
-                        'nominee_name': row[14],
-                        'nominee_gender': row[15],
-                        'nominee_dob': str(row[16]) if row[16] else None,
-                        'nominee_relationship': row[17],
-                        'insurance_status': row[18],
-                        'created_at': str(row[19]) if row[19] else None
-                    })
-                return riders
-    except Exception as e:
-        print(f"Error fetching riders: {e}")
+                rows = cursor.fetchall()
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT id, brand_name, store_name, employee_no, employee_name, 
+                               employee_email, employee_phone, employee_gender, employee_dob,
+                               pan_number, employee_address, employee_city, employee_state,
+                               employee_pin_code, nominee_name, nominee_gender, nominee_dob,
+                               nominee_relationship, insurance_status, created_at
+                        FROM rider_insurance_details 
+                        ORDER BY created_at DESC
+                    """)
+                    rows = cur.fetchall()
+            
+            riders = []
+            for row in rows:
+                riders.append({
+                    'id': row[0],
+                    'brand_name': row[1],
+                    'store_name': row[2],
+                    'employee_no': row[3],
+                    'employee_name': row[4],
+                    'employee_email': row[5],
+                    'employee_phone': row[6],
+                    'employee_gender': row[7],
+                    'employee_dob': str(row[8]) if row[8] else None,
+                    'pan_number': row[9],
+                    'employee_address': row[10],
+                    'employee_city': row[11],
+                    'employee_state': row[12],
+                    'employee_pin_code': row[13],
+                    'nominee_name': row[14],
+                    'nominee_gender': row[15],
+                    'nominee_dob': str(row[16]) if row[16] else None,
+                    'nominee_relationship': row[17],
+                    'insurance_status': row[18],
+                    'created_at': str(row[19]) if row[19] else None
+                })
+            return riders
+    except Exception:
         return []
 
 def fetch_rider_by_id(rider_id):
-    """Fetch a specific rider by ID"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     SELECT id, brand_name, store_name, employee_no, employee_name, 
                            employee_email, employee_phone, employee_gender, employee_dob,
                            pan_number, employee_address, employee_city, employee_state,
                            employee_pin_code, nominee_name, nominee_gender, nominee_dob,
                            nominee_relationship, insurance_status, created_at
                     FROM rider_insurance_details 
-                    WHERE id = %s
+                    WHERE id = ?
                 """, (rider_id,))
-                row = cur.fetchone()
-                if row:
-                    return {
-                        'id': row[0],
-                        'brand_name': row[1],
-                        'store_name': row[2],
-                        'employee_no': row[3],
-                        'employee_name': row[4],
-                        'employee_email': row[5],
-                        'employee_phone': row[6],
-                        'employee_gender': row[7],
-                        'employee_dob': str(row[8]) if row[8] else None,
-                        'pan_number': row[9],
-                        'employee_address': row[10],
-                        'employee_city': row[11],
-                        'employee_state': row[12],
-                        'employee_pin_code': row[13],
-                        'nominee_name': row[14],
-                        'nominee_gender': row[15],
-                        'nominee_dob': str(row[16]) if row[16] else None,
-                        'nominee_relationship': row[17],
-                        'insurance_status': row[18],
-                        'created_at': str(row[19]) if row[19] else None
-                    }
-                return None
-    except Exception as e:
-        print(f"Error fetching rider: {e}")
+                row = cursor.fetchone()
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT id, brand_name, store_name, employee_no, employee_name, 
+                               employee_email, employee_phone, employee_gender, employee_dob,
+                               pan_number, employee_address, employee_city, employee_state,
+                               employee_pin_code, nominee_name, nominee_gender, nominee_dob,
+                               nominee_relationship, insurance_status, created_at
+                        FROM rider_insurance_details 
+                        WHERE id = %s
+                    """, (rider_id,))
+                    row = cur.fetchone()
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'brand_name': row[1],
+                    'store_name': row[2],
+                    'employee_no': row[3],
+                    'employee_name': row[4],
+                    'employee_email': row[5],
+                    'employee_phone': row[6],
+                    'employee_gender': row[7],
+                    'employee_dob': str(row[8]) if row[8] else None,
+                    'pan_number': row[9],
+                    'employee_address': row[10],
+                    'employee_city': row[11],
+                    'employee_state': row[12],
+                    'employee_pin_code': row[13],
+                    'nominee_name': row[14],
+                    'nominee_gender': row[15],
+                    'nominee_dob': str(row[16]) if row[16] else None,
+                    'nominee_relationship': row[17],
+                    'insurance_status': row[18],
+                    'created_at': str(row[19]) if row[19] else None
+                }
+            return None
+    except Exception:
         return None
 
 def save_rider(data):
-    """Save a new rider to database"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     INSERT INTO rider_insurance_details 
                     (brand_name, store_name, employee_no, employee_name, employee_email,
                      employee_phone, employee_gender, employee_dob, pan_number,
                      employee_address, employee_city, employee_state, employee_pin_code,
                      nominee_name, nominee_gender, nominee_dob, nominee_relationship,
                      insurance_status, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     data.get('brandName'),
                     data.get('storeName'),
@@ -128,29 +149,63 @@ def save_rider(data):
                     data.get('nomineeDOB'),
                     data.get('nomineeRelationship'),
                     data.get('insuranceStatus', 'pending'),
-                    datetime.now()
+                    datetime.now().isoformat()
                 ))
-                rider_id = cur.fetchone()[0]
                 conn.commit()
-                return rider_id
-    except Exception as e:
-        print(f"Error saving rider: {e}")
+                return cursor.lastrowid
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO rider_insurance_details 
+                        (brand_name, store_name, employee_no, employee_name, employee_email,
+                         employee_phone, employee_gender, employee_dob, pan_number,
+                         employee_address, employee_city, employee_state, employee_pin_code,
+                         nominee_name, nominee_gender, nominee_dob, nominee_relationship,
+                         insurance_status, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        data.get('brandName'),
+                        data.get('storeName'),
+                        data.get('employeeNo'),
+                        data.get('employeeName'),
+                        data.get('employeeEmail'),
+                        data.get('employeePhone'),
+                        data.get('employeeGender'),
+                        data.get('employeeDOB'),
+                        data.get('panNumber'),
+                        data.get('employeeAddress'),
+                        data.get('employeeCity'),
+                        data.get('employeeState'),
+                        data.get('employeePinCode'),
+                        data.get('nomineeName'),
+                        data.get('nomineeGender'),
+                        data.get('nomineeDOB'),
+                        data.get('nomineeRelationship'),
+                        data.get('insuranceStatus', 'pending'),
+                        datetime.now()
+                    ))
+                    rider_id = cur.fetchone()[0]
+                    conn.commit()
+                    return rider_id
+    except Exception:
         return None
 
 def update_rider(rider_id, data):
-    """Update an existing rider"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     UPDATE rider_insurance_details 
-                    SET brand_name = %s, store_name = %s, employee_no = %s, 
-                        employee_name = %s, employee_email = %s, employee_phone = %s,
-                        employee_gender = %s, employee_dob = %s, pan_number = %s,
-                        employee_address = %s, employee_city = %s, employee_state = %s,
-                        employee_pin_code = %s, nominee_name = %s, nominee_gender = %s,
-                        nominee_dob = %s, nominee_relationship = %s, insurance_status = %s
-                    WHERE id = %s
+                    SET brand_name = ?, store_name = ?, employee_no = ?, 
+                        employee_name = ?, employee_email = ?, employee_phone = ?,
+                        employee_gender = ?, employee_dob = ?, pan_number = ?,
+                        employee_address = ?, employee_city = ?, employee_state = ?,
+                        employee_pin_code = ?, nominee_name = ?, nominee_gender = ?,
+                        nominee_dob = ?, nominee_relationship = ?, insurance_status = ?,
+                        updated_at = ?
+                    WHERE id = ?
                 """, (
                     data.get('brandName'),
                     data.get('storeName'),
@@ -170,141 +225,191 @@ def update_rider(rider_id, data):
                     data.get('nomineeDOB'),
                     data.get('nomineeRelationship'),
                     data.get('insuranceStatus', 'pending'),
+                    datetime.now().isoformat(),
                     rider_id
                 ))
                 conn.commit()
-                return True
-    except Exception as e:
-        print(f"Error updating rider: {e}")
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE rider_insurance_details 
+                        SET brand_name = %s, store_name = %s, employee_no = %s, 
+                            employee_name = %s, employee_email = %s, employee_phone = %s,
+                            employee_gender = %s, employee_dob = %s, pan_number = %s,
+                            employee_address = %s, employee_city = %s, employee_state = %s,
+                            employee_pin_code = %s, nominee_name = %s, nominee_gender = %s,
+                            nominee_dob = %s, nominee_relationship = %s, insurance_status = %s
+                        WHERE id = %s
+                    """, (
+                        data.get('brandName'),
+                        data.get('storeName'),
+                        data.get('employeeNo'),
+                        data.get('employeeName'),
+                        data.get('employeeEmail'),
+                        data.get('employeePhone'),
+                        data.get('employeeGender'),
+                        data.get('employeeDOB'),
+                        data.get('panNumber'),
+                        data.get('employeeAddress'),
+                        data.get('employeeCity'),
+                        data.get('employeeState'),
+                        data.get('employeePinCode'),
+                        data.get('nomineeName'),
+                        data.get('nomineeGender'),
+                        data.get('nomineeDOB'),
+                        data.get('nomineeRelationship'),
+                        data.get('insuranceStatus', 'pending'),
+                        rider_id
+                    ))
+                    conn.commit()
+            return True
+    except Exception:
         return False
 
 def delete_rider(rider_id):
-    """Delete a rider from database"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM rider_insurance_details WHERE id = %s", (rider_id,))
-                conn.commit()
-                return True
-    except Exception as e:
-        print(f"Error deleting rider: {e}")
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM rider_insurance_details WHERE id = ?", (rider_id,))
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM rider_insurance_details WHERE id = %s", (rider_id,))
+            conn.commit()
+            return True
+    except Exception:
         return False
 
 def get_rider_count_by_status(status):
-    """Get count of riders by insurance status"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT COUNT(*) FROM rider_insurance_details WHERE insurance_status = %s",
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT COUNT(*) FROM rider_insurance_details WHERE insurance_status = ?",
                     (status,)
                 )
-                count = cur.fetchone()[0]
-                return count
-    except Exception as e:
-        print(f"Error getting rider count: {e}")
+                count = cursor.fetchone()[0]
+            else:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM rider_insurance_details WHERE insurance_status = %s",
+                        (status,)
+                    )
+                    count = cur.fetchone()[0]
+            return count
+    except Exception:
         return 0
 
 def get_total_rider_count():
-    """Get total count of riders"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM rider_insurance_details")
-                count = cur.fetchone()[0]
-                return count
-    except Exception as e:
-        print(f"Error getting total rider count: {e}")
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM rider_insurance_details")
+                count = cursor.fetchone()[0]
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM rider_insurance_details")
+                    count = cur.fetchone()[0]
+            return count
+    except Exception:
         return 0
 
 def get_expiring_policies_count():
-    """Get count of policies expiring within 30 days"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     SELECT COUNT(*) FROM rider_insurance_details 
-                    WHERE insurance_status = 'active'
+                    WHERE insurance_status IN ('pending', 'expiring')
                 """)
-                count = cur.fetchone()[0]
-                return count
-    except Exception as e:
-        print(f"Error getting expiring policies count: {e}")
+                count = cursor.fetchone()[0]
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*) FROM rider_insurance_details 
+                        WHERE insurance_status IN ('pending', 'expiring')
+                    """)
+                    count = cur.fetchone()[0]
+            return count
+    except Exception:
         return 0
 
 def get_recently_activated_count():
-    """Get count of recently activated riders (within 7 days)"""
     try:
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                seven_days_ago = datetime.now() - timedelta(days=7)
-                cur.execute("""
+            seven_days_ago = datetime.now() - timedelta(days=7)
+            
+            if use_sqlite:
+                cursor = conn.cursor()
+                cursor.execute("""
                     SELECT COUNT(*) FROM rider_insurance_details 
-                    WHERE insurance_status = 'active' AND created_at >= %s
-                """, (seven_days_ago,))
-                count = cur.fetchone()[0]
-                return count
-    except Exception as e:
-        print(f"Error getting recently activated count: {e}")
+                    WHERE insurance_status = 'active' AND created_at >= ?
+                """, (seven_days_ago.isoformat(),))
+                count = cursor.fetchone()[0]
+            else:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*) FROM rider_insurance_details 
+                        WHERE insurance_status = 'active' AND created_at >= %s
+                    """, (seven_days_ago,))
+                    count = cur.fetchone()[0]
+            
+            return count
+    except Exception:
         return 0
-
-# ==================== API Routes ====================
 
 @app.route('/api/riders', methods=['GET'])
 def get_riders():
-    """Get all riders"""
     riders = fetch_all_riders()
-    return jsonify(riders)
+    return jsonify(riders), 200
 
 @app.route('/api/riders/<int:rider_id>', methods=['GET'])
 def get_rider(rider_id):
-    """Get a specific rider"""
     rider = fetch_rider_by_id(rider_id)
     if rider:
-        return jsonify(rider)
+        return jsonify(rider), 200
     return jsonify({'error': 'Rider not found'}), 404
 
 @app.route('/api/riders', methods=['POST'])
 def create_rider():
-    """Create a new rider"""
     try:
         data = request.get_json()
         rider_id = save_rider(data)
         if rider_id:
             return jsonify({'id': rider_id, 'message': 'Rider created successfully'}), 201
         return jsonify({'error': 'Error creating rider'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Error creating rider'}), 500
 
 @app.route('/api/riders/<int:rider_id>', methods=['PUT'])
 def update_rider_route(rider_id):
-    """Update a rider"""
     try:
         data = request.get_json()
         if update_rider(rider_id, data):
-            return jsonify({'message': 'Rider updated successfully'})
+            return jsonify({'message': 'Rider updated successfully'}), 200
         return jsonify({'error': 'Error updating rider'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Error updating rider'}), 500
 
 @app.route('/api/riders/<int:rider_id>', methods=['DELETE'])
 def delete_rider_route(rider_id):
-    """Delete a rider"""
     try:
         if delete_rider(rider_id):
-            return jsonify({'message': 'Rider deleted successfully'})
+            return jsonify({'message': 'Rider deleted successfully'}), 200
         return jsonify({'error': 'Error deleting rider'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return jsonify({'error': 'Error deleting rider'}), 500
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    """Get dashboard statistics with database counts"""
     try:
         total_riders = get_total_rider_count()
         active_riders = get_rider_count_by_status('active')
         pending_riders = get_rider_count_by_status('pending')
-        completed_riders = get_rider_count_by_status('active')
+        completed_riders = get_rider_count_by_status('completed')
         expiring_policies = get_expiring_policies_count()
         recently_activated = get_recently_activated_count()
         
@@ -317,9 +422,8 @@ def get_stats():
             'recently_activated': recently_activated
         }
         
-        return jsonify(stats)
-    except Exception as e:
-        print(f"Error getting stats: {e}")
+        return jsonify(stats), 200
+    except Exception:
         return jsonify({
             'total_riders': 0,
             'active_riders': 0,
@@ -327,12 +431,15 @@ def get_stats():
             'completed_riders': 0,
             'expiring_policies': 0,
             'recently_activated': 0
-        })
+        }), 500
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'message': 'API is running'})
+    return jsonify({'status': 'healthy', 'message': 'API is running'}), 200
+
+@app.route('/api/health', methods=['GET'])
+def api_health():
+    return jsonify({'status': 'healthy', 'message': 'Riders API is running'}), 200
 
 @app.errorhandler(404)
 def not_found(error):
@@ -343,13 +450,4 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    print('🚀 Starting Onsurity Rider Insurance API...')
-    print('📡 API running on http://127.0.0.1:5000')
-    print('📚 API Documentation:')
-    print('   GET /api/riders - Get all riders')
-    print('   POST /api/riders - Create new rider')
-    print('   PUT /api/riders/<id> - Update rider')
-    print('   DELETE /api/riders/<id> - Delete rider')
-    print('   GET /api/stats - Get dashboard statistics')
-    print('   GET /health - Health check')
     app.run(debug=True, host='127.0.0.1', port=5000)
