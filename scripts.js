@@ -3,13 +3,20 @@ let filteredRidersData = [];
 let currentEditingId = null;
 let currentDeleteId = null;
 
-// Environment-aware API URL
-const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:5000/api'
-  : 'https://your-deployed-backend.com/api'; // Replace with your deployed backend
+// API URL Configuration - Use public backend, not localhost
+// For production, replace this with your deployed backend URL
+const getAPIURL = () => {
+  // Check if we're in development mode (localhost)
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://127.0.0.1:5000/api';
+  }
+  
+  // For Vercel production - use your deployed backend
+  // Replace 'your-backend-url.com' with your actual backend
+  return 'https://your-backend-url.com/api'; // UPDATE THIS WITH YOUR BACKEND URL
+};
 
-// For Vercel deployment - use environment variable
-const PRODUCTION_API_URL = 'http://127.0.0.1:5000/api'; // Will be updated for production
+const API_URL = getAPIURL();
 
 // DOM Elements
 const registrationForm = document.getElementById('registrationForm');
@@ -123,13 +130,15 @@ async function handleFormSubmit(e) {
       showSuccessPopup();
       await fetchRiders();
       await updateDashboardStats();
+      console.log('✅ Rider saved successfully to backend');
     } else {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ Backend error:', errorData);
       showNotification(errorData.error || 'Error saving rider data', 'error');
     }
   } catch (error) {
-    console.error('API Connection Error:', error);
-    showNotification('Server connection failed. Saving to local storage.', 'warning');
+    console.error('🔴 API Connection Error:', error.message);
+    showNotification('Cannot connect to backend. Using local storage instead.', 'warning');
     
     // Fallback to local storage
     try {
@@ -139,12 +148,14 @@ async function handleFormSubmit(e) {
           ridersData[index] = { 
             ...ridersData[index], 
             ...riderData,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            source: 'local'
           };
         }
       } else {
         riderData.id = Date.now();
         riderData.created_at = new Date().toISOString();
+        riderData.source = 'local';
         ridersData.push(riderData);
       }
       saveToLocalStorage();
@@ -152,8 +163,9 @@ async function handleFormSubmit(e) {
       showSuccessPopup();
       renderRiders();
       updateDashboardStats();
+      console.log('💾 Rider saved to local storage');
     } catch (localError) {
-      console.error('Local storage error:', localError);
+      console.error('❌ Local storage error:', localError);
       showNotification('Failed to save data', 'error');
     }
   } finally {
@@ -238,46 +250,33 @@ function populateFormWithData(rider) {
   });
 }
 
-// Fetch Riders with retry logic
-async function fetchRiders(retryCount = 3) {
-  for (let attempt = 1; attempt <= retryCount; attempt++) {
-    try {
-      const response = await fetch(`${API_URL}/riders`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        ridersData = Array.isArray(data) ? data : [];
-        renderRiders();
-        return;
-      } else if (response.status === 0 || response.status >= 500) {
-        // Server error or network error, retry
-        if (attempt < retryCount) {
-          console.warn(`Retry ${attempt}/${retryCount} - Status: ${response.status}`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          continue;
-        }
-        throw new Error(`Server error: ${response.status}`);
-      } else {
-        throw new Error('Failed to fetch riders');
+// Fetch Riders with proper error handling
+async function fetchRiders() {
+  try {
+    console.log(`🔄 Fetching riders from: ${API_URL}/riders`);
+    
+    const response = await fetch(`${API_URL}/riders`, {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.warn(`Attempt ${attempt}/${retryCount} - Error:`, error.message);
-      
-      if (attempt === retryCount) {
-        console.warn('API unreachable: Loading from local storage');
-        loadFromLocalStorage();
-        renderRiders();
-        return;
-      }
-      
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      ridersData = Array.isArray(data) ? data : [];
+      console.log(`✅ Successfully fetched ${ridersData.length} riders from backend`);
+      renderRiders();
+      return;
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+  } catch (error) {
+    console.warn(`⚠️ Backend fetch failed: ${error.message}`);
+    console.log('📂 Loading from local storage instead...');
+    loadFromLocalStorage();
+    renderRiders();
   }
 }
 
@@ -322,6 +321,7 @@ function createRiderCard(rider) {
   const employeePhone = rider.employee_phone || rider.employeePhone || 'N/A';
   const employeeCity = rider.employee_city || rider.employeeCity || 'N/A';
   const employeeState = rider.employee_state || rider.employeeState || 'N/A';
+  const source = rider.source ? ` (${rider.source})` : '';
 
   return `
     <div class="rider-card">
@@ -366,45 +366,36 @@ function createRiderCard(rider) {
   `;
 }
 
-// Update Dashboard Stats with retry logic
-async function updateDashboardStats(retryCount = 3) {
-  for (let attempt = 1; attempt <= retryCount; attempt++) {
-    try {
-      const response = await fetch(`${API_URL}/stats`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const stats = await response.json();
-        document.getElementById('totalRiders').textContent = stats.total_riders || 0;
-        document.getElementById('activeRiders').textContent = stats.active_riders || 0;
-        document.getElementById('pendingInsurance').textContent = stats.pending_riders || 0;
-        document.getElementById('completedInsurance').textContent = stats.completed_riders || 0;
-        document.getElementById('expiringPolicies').textContent = stats.expiring_policies || 0;
-        document.getElementById('recentlyActivated').textContent = stats.recently_activated || 0;
-        return;
-      } else if (response.status >= 500) {
-        if (attempt < retryCount) {
-          console.warn(`Retry ${attempt}/${retryCount} for stats`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          continue;
-        }
-        throw new Error('Failed to fetch stats');
+// Update Dashboard Stats
+async function updateDashboardStats() {
+  try {
+    console.log(`🔄 Fetching stats from: ${API_URL}/stats`);
+    
+    const response = await fetch(`${API_URL}/stats`, {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.warn(`Stats attempt ${attempt}/${retryCount}:`, error.message);
-      
-      if (attempt === retryCount) {
-        console.warn('Computing stats locally');
-        computeLocalStats();
-        return;
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    });
+    
+    if (response.ok) {
+      const stats = await response.json();
+      document.getElementById('totalRiders').textContent = stats.total_riders || 0;
+      document.getElementById('activeRiders').textContent = stats.active_riders || 0;
+      document.getElementById('pendingInsurance').textContent = stats.pending_riders || 0;
+      document.getElementById('completedInsurance').textContent = stats.completed_riders || 0;
+      document.getElementById('expiringPolicies').textContent = stats.expiring_policies || 0;
+      document.getElementById('recentlyActivated').textContent = stats.recently_activated || 0;
+      console.log('✅ Stats fetched successfully from backend');
+      return;
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+  } catch (error) {
+    console.warn(`⚠️ Stats fetch failed: ${error.message}`);
+    console.log('📊 Computing stats from local data...');
+    computeLocalStats();
   }
 }
 
@@ -421,6 +412,8 @@ function computeLocalStats() {
   document.getElementById('completedInsurance').textContent = completed;
   document.getElementById('expiringPolicies').textContent = Math.max(0, inactive);
   document.getElementById('recentlyActivated').textContent = Math.max(0, Math.floor(total * 0.2));
+  
+  console.log('📊 Local stats computed:', { total, active, pending, completed, inactive });
 }
 
 // Search & Filter
@@ -444,6 +437,7 @@ function handleSearch() {
     return matchesSearch && matchesStatus;
   });
 
+  console.log(`🔍 Search: "${searchTerm}" | Status: "${statusFilter}" | Found: ${filteredRidersData.length} riders`);
   renderRiders();
 }
 
@@ -451,48 +445,41 @@ function resetSearch() {
   document.getElementById('searchInput').value = '';
   document.getElementById('statusFilter').value = 'all';
   filteredRidersData = [];
+  console.log('🔄 Search reset');
   renderRiders();
 }
 
-// Delete Rider with retry logic
-async function confirmDelete(retryCount = 3) {
+// Delete Rider
+async function confirmDelete() {
   if (currentDeleteId) {
-    for (let attempt = 1; attempt <= retryCount; attempt++) {
-      try {
-        const response = await fetch(`${API_URL}/riders/${currentDeleteId}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
+    try {
+      console.log(`🗑️  Deleting rider with ID: ${currentDeleteId}`);
+      
+      const response = await fetch(`${API_URL}/riders/${currentDeleteId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
 
-        if (response.ok) {
-          closeDeleteModal();
-          await fetchRiders();
-          await updateDashboardStats();
-          showNotification('Rider deleted successfully', 'success');
-          return;
-        } else if (response.status >= 500) {
-          if (attempt < retryCount) {
-            console.warn(`Retry ${attempt}/${retryCount} for delete`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-            continue;
-          }
-          throw new Error('Failed to delete rider');
-        }
-      } catch (error) {
-        console.warn(`Delete attempt ${attempt}/${retryCount}:`, error.message);
-        
-        if (attempt === retryCount) {
-          console.warn('Using local storage for delete');
-          ridersData = ridersData.filter(r => r.id !== currentDeleteId);
-          saveToLocalStorage();
-          closeDeleteModal();
-          renderRiders();
-          updateDashboardStats();
-          showNotification('Rider deleted successfully', 'success');
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
+      if (response.ok) {
+        console.log('✅ Rider deleted successfully from backend');
+        closeDeleteModal();
+        await fetchRiders();
+        await updateDashboardStats();
+        showNotification('Rider deleted successfully', 'success');
+        return;
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+    } catch (error) {
+      console.warn(`⚠️ Backend delete failed: ${error.message}`);
+      console.log('📂 Deleting from local storage...');
+      
+      ridersData = ridersData.filter(r => r.id !== currentDeleteId);
+      saveToLocalStorage();
+      closeDeleteModal();
+      renderRiders();
+      updateDashboardStats();
+      showNotification('Rider deleted successfully (local)', 'success');
     }
   }
 }
@@ -506,6 +493,7 @@ function exportData() {
 
   const csv = convertToCSV(ridersData);
   downloadCSV(csv, 'riders_data.csv');
+  console.log(`📥 Exported ${ridersData.length} riders to CSV`);
 }
 
 function convertToCSV(data) {
@@ -541,9 +529,11 @@ function toggleTheme() {
   if (document.body.classList.contains('dark-mode')) {
     icon.textContent = '☀️';
     localStorage.setItem('theme', 'dark');
+    console.log('🌙 Dark mode enabled');
   } else {
     icon.textContent = '🌙';
     localStorage.setItem('theme', 'light');
+    console.log('☀️ Light mode enabled');
   }
 }
 
@@ -579,7 +569,14 @@ function isValidAge(dateString) {
 }
 
 function showNotification(message, type = 'info') {
-  console.log(`[${type.toUpperCase()}] ${message}`);
+  const icons = {
+    'success': '✅',
+    'error': '❌',
+    'warning': '⚠️',
+    'info': 'ℹ️'
+  };
+  
+  console.log(`${icons[type] || icons['info']} ${message}`);
   alert(message);
 }
 
@@ -587,8 +584,9 @@ function showNotification(message, type = 'info') {
 function saveToLocalStorage() {
   try {
     localStorage.setItem('ridersData', JSON.stringify(ridersData));
+    console.log(`💾 Saved ${ridersData.length} riders to local storage`);
   } catch (error) {
-    console.error('LocalStorage save error:', error);
+    console.error('❌ LocalStorage save error:', error);
   }
 }
 
@@ -599,8 +597,9 @@ function loadFromLocalStorage() {
     if (!Array.isArray(ridersData)) {
       ridersData = [];
     }
+    console.log(`📂 Loaded ${ridersData.length} riders from local storage`);
   } catch (error) {
-    console.error('LocalStorage load error:', error);
+    console.error('❌ LocalStorage load error:', error);
     ridersData = [];
   }
 }
@@ -608,9 +607,11 @@ function loadFromLocalStorage() {
 // Initialize App
 async function initializeApp() {
   try {
-    console.log('🚀 Initializing Onsurity Rider Insurance Dashboard...');
-    console.log(`📍 Environment: ${window.location.hostname}`);
-    console.log(`🔗 API URL: ${API_URL}`);
+    console.log('%c=== ONSURITY RIDER INSURANCE DASHBOARD ===', 'font-size: 16px; font-weight: bold; color: #007bff;');
+    console.log(`🌍 Environment: ${window.location.hostname}`);
+    console.log(`🔗 API Endpoint: ${API_URL}`);
+    console.log(`📅 Loaded at: ${new Date().toLocaleString()}`);
+    console.log('');
     
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
@@ -625,9 +626,10 @@ async function initializeApp() {
     await fetchRiders();
     await updateDashboardStats();
     
-    console.log('✅ Dashboard Initialized Successfully');
+    console.log('%c✅ DASHBOARD INITIALIZED SUCCESSFULLY', 'font-size: 14px; font-weight: bold; color: #28a745;');
+    console.log('');
   } catch (error) {
-    console.error('Initialization error:', error);
+    console.error('❌ Initialization error:', error);
   }
 }
 
