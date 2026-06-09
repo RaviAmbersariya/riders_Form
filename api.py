@@ -2,9 +2,27 @@ from db_conn import get_connection, use_sqlite
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
+import os
 
 app = Flask(__name__)
-CORS(app)
+
+# Enhanced CORS configuration
+cors_config = {
+    "origins": [
+        "https://zippee-insurance.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000"
+    ],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "expose_headers": ["Content-Type"],
+    "supports_credentials": True,
+    "max_age": 3600
+}
+
+CORS(app, resources={r"/api/*": cors_config})
 
 def fetch_all_riders():
     try:
@@ -361,20 +379,26 @@ def get_recently_activated_count():
     except Exception:
         return 0
 
-@app.route('/api/riders', methods=['GET'])
+@app.route('/api/riders', methods=['GET', 'OPTIONS'])
 def get_riders():
+    if request.method == 'OPTIONS':
+        return '', 204
     riders = fetch_all_riders()
     return jsonify(riders), 200
 
-@app.route('/api/riders/<int:rider_id>', methods=['GET'])
+@app.route('/api/riders/<int:rider_id>', methods=['GET', 'OPTIONS'])
 def get_rider(rider_id):
+    if request.method == 'OPTIONS':
+        return '', 204
     rider = fetch_rider_by_id(rider_id)
     if rider:
         return jsonify(rider), 200
     return jsonify({'error': 'Rider not found'}), 404
 
-@app.route('/api/riders', methods=['POST'])
+@app.route('/api/riders', methods=['POST', 'OPTIONS'])
 def create_rider():
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         data = request.get_json()
         rider_id = save_rider(data)
@@ -384,8 +408,10 @@ def create_rider():
     except Exception:
         return jsonify({'error': 'Error creating rider'}), 500
 
-@app.route('/api/riders/<int:rider_id>', methods=['PUT'])
+@app.route('/api/riders/<int:rider_id>', methods=['PUT', 'OPTIONS'])
 def update_rider_route(rider_id):
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         data = request.get_json()
         if update_rider(rider_id, data):
@@ -394,8 +420,10 @@ def update_rider_route(rider_id):
     except Exception:
         return jsonify({'error': 'Error updating rider'}), 500
 
-@app.route('/api/riders/<int:rider_id>', methods=['DELETE'])
+@app.route('/api/riders/<int:rider_id>', methods=['DELETE', 'OPTIONS'])
 def delete_rider_route(rider_id):
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         if delete_rider(rider_id):
             return jsonify({'message': 'Rider deleted successfully'}), 200
@@ -403,8 +431,10 @@ def delete_rider_route(rider_id):
     except Exception:
         return jsonify({'error': 'Error deleting rider'}), 500
 
-@app.route('/api/stats', methods=['GET'])
+@app.route('/api/stats', methods=['GET', 'OPTIONS'])
 def get_stats():
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         total_riders = get_total_rider_count()
         active_riders = get_rider_count_by_status('active')
